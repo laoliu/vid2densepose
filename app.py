@@ -15,6 +15,7 @@ from densepose import add_densepose_config
 from densepose.vis.extractor import DensePoseResultExtractor
 from densepose.vis.densepose_results import DensePoseResultsFineSegmentationVisualizer as Visualizer
 import tempfile
+from bvh_export import create_bvh_from_densepose_results
 
 
 _original_json_schema_to_python_type = gr_utils._json_schema_to_python_type
@@ -47,13 +48,17 @@ def _resolve_input_path(input_video: Union[str, dict, None]) -> Path:
 
 
 # Function to process video
-def process_video(input_video_path):
+def process_video(input_video_path, export_bvh: bool = False):
     progress = gr.Progress(track_tqdm=True)
 
     src_path = _resolve_input_path(input_video_path)
 
     # Temporary path for output video
     output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    bvh_output_path = None
+    
+    if export_bvh:
+        bvh_output_path = tempfile.NamedTemporaryFile(suffix=".bvh", delete=False).name
 
     # Initialize Detectron2 configuration for DensePose
     cfg = get_cfg()
@@ -81,6 +86,9 @@ def process_video(input_video_path):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
+    # Store DensePose results for BVH export
+    densepose_results = [] if export_bvh else None
+
     # Process each frame
     frame_idx = 0
     while cap.isOpened():
@@ -89,15 +97,28 @@ def process_video(input_video_path):
             break
 
         with torch.no_grad():
-            outputs = predictor(frame)['instances']
+            outputs = predictor(frame)
         
-        results = DensePoseResultExtractor()(outputs)
-        cmap = cv2.COLORMAP_VIRIDIS
-        # Visualizer outputs black for background, but we want the 0 value of
-        # the colormap, so we initialize the array with that value
-        arr = cv2.applyColorMap(np.zeros((height, width), dtype=np.uint8), cmap)
-        out_frame = Visualizer(alpha=1, cmap=cmap).visualize(arr, results)        
-        out.write(out_frame)
+        # Extract instances
+        if "instances" not in outputs or len(outputs["instances"]) == 0:
+            # No detection, write original frame
+            out.write(frame)
+            if export_bvh:
+                densepose_results.append(None)
+        else:
+            instances = outputs["instances"]
+            results = DensePoseResultExtractor()(instances)
+            
+            # Store instances for BVH export (not the extractor result)
+            if export_bvh:
+                densepose_results.append(instances)
+            
+            cmap = cv2.COLORMAP_VIRIDIS
+            # Visualizer outputs black for background, but we want the 0 value of
+            # the colormap, so we initialize the array with that value
+            arr = cv2.applyColorMap(np.zeros((height, width), dtype=np.uint8), cmap)
+            out_frame = Visualizer(alpha=1, cmap=cmap).visualize(arr, results)        
+            out.write(out_frame)
 
         frame_idx += 1
         if total_frames > 0:
@@ -109,12 +130,31 @@ def process_video(input_video_path):
     cap.release()
     out.release()
 
-    progress(0.99, desc="导出结果")
+    progress(0.95, desc="导出视频结果")
+    
+    # Export BVH if requested
+    if export_bvh and densepose_results:
+        progress(0.97, desc="生成 BVH 文件")
+        try:
+            success = create_bvh_from_densepose_results(
+                densepose_results, 
+                bvh_output_path,
+                fps=fps,
+                scale=0.1
+            )
+            if success:
+                progress(0.99, desc="BVH 导出完成")
+        except Exception as e:
+            print(f"BVH 导出失败: {e}")
+            bvh_output_path = None
 
     progress(1.0, desc="完成")
 
-    # Return processed video
-    return output_video_path
+    # Return processed video and BVH file (if requested)
+    if export_bvh and bvh_output_path:
+        return output_video_path, bvh_output_path
+    else:
+        return output_video_path, None
 
 # Gradio interface
 root_dir = Path(__file__).resolve().parent
@@ -123,14 +163,24 @@ example_videos = [[str(p.resolve())] for p in sample_dir.glob("*.mp4")]
 
 iface = gr.Interface(
     fn=process_video,
-    inputs=gr.Video(
-        label="Input Video",
-        sources=["upload", "webcam"],
-        include_audio=False,
-    ),
-    outputs=gr.Video(label="Output DensePose Video"),
-    title="Video 2 DensePose",
-    description="Upload a clip or allow webcam access. Example clips are provided below if the browser blocks your camera.",
+    inputs=[
+        gr.Video(
+            label="Input Video",
+            sources=["upload", "webcam"],
+            include_audio=False,
+        ),
+        gr.Checkbox(
+            label="导出 BVH 文件",
+            value=False,
+            info="同时生成骨骼动画 BVH 文件（可用于 Blender、Maya 等 3D 软件）"
+        )
+    ],
+    outputs=[
+        gr.Video(label="Output DensePose Video"),
+        gr.File(label="BVH Motion File", visible=True)
+    ],
+    title="Video 2 DensePose + BVH",
+    description="上传视频或使用摄像头录制。勾选「导出 BVH 文件」可同时生成骨骼动画文件。示例视频如下：",
     examples=example_videos,
     allow_flagging="never",
     concurrency_limit=1,

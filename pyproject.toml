@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vid2densepose"
-version = "0.1.0"
-description = "A powerful tool for applying the DensePose model to videos, generating detailed Part Index visualizations"
+version = "0.2.0"
+description = "A powerful tool for applying the DensePose model to videos, generating detailed Part Index visualizations and BVH motion capture files"
 readme = "README.md"
 requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
     {name = "Flode-Labs"}
 ]
-keywords = ["densepose", "video", "animation", "detectron2", "computer-vision"]
+keywords = ["densepose", "video", "animation", "detectron2", "computer-vision", "bvh", "motion-capture", "skeleton"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -50,4 +50,4 @@ Issues = "https://github.com/Flode-Labs/vid2densepose/issues"
 vid2densepose = "main:main"
 
 [tool.setuptools]
-py-modules = ["main", "app"]
+py-modules = ["main", "app", "bvh_export"]
