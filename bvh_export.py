@@ -242,25 +242,25 @@ class BVHExporter:
                 spine1_y = y1 + height * 0.18  # 上胸 18%
                 spine_y = y1 + height * 0.28   # 下胸 28%
             
-            # 计算肩膀Y坐标（肩膀应该在颈部和上胸之间的靠上位置）
-            # 从图片看，肩膀应该几乎与颈部同高，只略低一点点
-            shoulder_y = neck_y + (spine1_y - neck_y) * 0.2  # 肩膀在颈部下方20%的位置（更靠近颈部）
+            # 计算肩膀Y坐标（肩膀应该在颈部同一水平线上）
+            # L_Shoulder和R_Shoulder基本就在Neck的两边
+            shoulder_y = neck_y  # 肩膀和颈部在同一高度
             
             # 臀部位置（腰带位置，约45%）
             hips_y = y1 + height * 0.45
             
-            # 手臂长度调整：前臂和手再往上移（进一步缩短）
+            # 手臂长度调整：前臂和手往下移（增加长度）
             # L_Arm（肘部）应该在L_Shoulder附近的高度
-            # L_ForeArm, L_Hand 再略微往上
+            # L_ForeArm, L_Hand 需要往下移
             upper_arm_length = height * 0.03   # 上臂 3%（肘部紧靠肩膀）
-            forearm_length = height * 0.10     # 前臂 10%（再缩短，往上移）
-            hand_length = height * 0.08        # 手 8%（再缩短，往上移）
-            # 总手臂长度：3% + 10% + 8% = 21% 身高
-            # 肩膀19% + 21% = 40%（手指尖在腰部附近）
-            
+            forearm_length = height * 0.15     # 前臂 15%（增加，往下移）
+            hand_length = height * 0.10        # 手 10%（增加，往下移）
+            # 总手臂长度：3% + 15% + 10% = 28% 身高
+            # 肩膀16.5% + 28% = 44.5%（手指尖在臀部下方）
+
             # X轴宽度调整
-            # 肩宽：成人肩宽约为身高的25-28%
-            shoulder_width = width * 0.35      # 肩膀距离中心线 35% 宽度（左右各35%，总70%宽）
+            # 肩宽：缩窄肩膀，更靠近颈部
+            shoulder_width = width * 0.15      # 肩膀距离中心线 15% 宽度（左右各15%，总30%宽，更靠近颈部）
             
             # 手臂X轴：前臂和手往外展开
             arm_width = width * 0.36           # 上臂（肘部）36%
