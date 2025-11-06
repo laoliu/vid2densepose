@@ -31,13 +31,25 @@ To utilize this tool, ensure the installation of:
     ```
 
 2. Install necessary Python packages:
+    
+    **Note:** Due to build dependencies, you need to install in two steps:
+    
     ```bash
-    pip install -r requirements.txt
+    # First, install base dependencies (including PyTorch)
+    pip install -r requirements-base.txt
+    
+    # Then, install detectron2 with DensePose
+    pip install --no-build-isolation -r requirements-detectron2.txt
     ```
-
-3. Clone the Detectron repository:
+    
+    Or using the modern `pyproject.toml`:
+    
     ```bash
-    git clone https://github.com/facebookresearch/detectron2.git
+    # Install base dependencies first
+    pip install "numpy<2.0" torch==2.1.0 torchvision==0.16.0 opencv-python gradio
+    
+    # Then install detectron2
+    pip install --no-build-isolation "git+https://github.com/facebookresearch/detectron2@main#subdirectory=projects/DensePose"
     ```
 
 ## Usage Guide

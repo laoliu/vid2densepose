@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vid2densepose"
+version = "0.1.0"
+description = "A powerful tool for applying the DensePose model to videos, generating detailed Part Index visualizations"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+authors = [
+    {name = "Flode-Labs"}
+]
+keywords = ["densepose", "video", "animation", "detectron2", "computer-vision"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Multimedia :: Video",
+]
+
+dependencies = [
+    "torch==2.1.0",
+    "torchvision==0.16.0",
+    "opencv-python",
+    "gradio",
+    "numpy<2.0",
+]
+
+[project.optional-dependencies]
+detectron2 = [
+    "detectron2 @ git+https://github.com/facebookresearch/detectron2@main#subdirectory=projects/DensePose",
+]
+
+[project.urls]
+Homepage = "https://github.com/Flode-Labs/vid2densepose"
+Repository = "https://github.com/Flode-Labs/vid2densepose"
+Issues = "https://github.com/Flode-Labs/vid2densepose/issues"
+
+[project.scripts]
+vid2densepose = "main:main"
+
+[tool.setuptools]
+py-modules = ["main", "app"]
+
+[tool.uv.extra-build-dependencies]
+git = ["setuptools", "wheel"]
