@@ -15,7 +15,8 @@ from densepose import add_densepose_config
 from densepose.vis.extractor import DensePoseResultExtractor
 from densepose.vis.densepose_results import DensePoseResultsFineSegmentationVisualizer as Visualizer
 import tempfile
-from bvh_export import create_bvh_from_densepose_results
+from bvh_export import create_bvh_from_densepose_results, BVHExporter
+from skeleton_visualizer import create_skeleton_video
 
 
 _original_json_schema_to_python_type = gr_utils._json_schema_to_python_type
@@ -48,17 +49,21 @@ def _resolve_input_path(input_video: Union[str, dict, None]) -> Path:
 
 
 # Function to process video
-def process_video(input_video_path, export_bvh: bool = False):
+def process_video(input_video_path, export_bvh: bool = False, show_skeleton: bool = False):
     progress = gr.Progress(track_tqdm=True)
 
     src_path = _resolve_input_path(input_video_path)
 
     # Temporary path for output video
     output_video_path = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
+    skeleton_video_path = None
     bvh_output_path = None
     
     if export_bvh:
         bvh_output_path = tempfile.NamedTemporaryFile(suffix=".bvh", delete=False).name
+    
+    if show_skeleton:
+        skeleton_video_path = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False).name
 
     # Initialize Detectron2 configuration for DensePose
     cfg = get_cfg()
@@ -86,8 +91,9 @@ def process_video(input_video_path, export_bvh: bool = False):
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = cv2.VideoWriter(output_video_path, fourcc, fps, (width, height))
 
-    # Store DensePose results for BVH export
-    densepose_results = [] if export_bvh else None
+    # Store DensePose results for BVH export / skeleton visualization
+    densepose_results = [] if (export_bvh or show_skeleton) else None
+    keypoints_sequence = [] if show_skeleton else None
 
     # Process each frame
     frame_idx = 0
@@ -110,7 +116,7 @@ def process_video(input_video_path, export_bvh: bool = False):
             results = DensePoseResultExtractor()(instances)
             
             # Store instances for BVH export (not the extractor result)
-            if export_bvh:
+            if export_bvh or show_skeleton:
                 densepose_results.append(instances)
             
             cmap = cv2.COLORMAP_VIRIDIS
@@ -132,6 +138,17 @@ def process_video(input_video_path, export_bvh: bool = False):
 
     progress(0.95, desc="导出视频结果")
     
+    # Extract keypoints for skeleton visualization
+    if show_skeleton and densepose_results:
+        progress(0.96, desc="提取骨架关键点")
+        exporter = BVHExporter(fps=fps)
+        for result in densepose_results:
+            if result is not None:
+                keypoints = exporter.extract_keypoints_from_densepose(result)
+                keypoints_sequence.append(keypoints)
+            else:
+                keypoints_sequence.append(None)
+    
     # Export BVH if requested
     if export_bvh and densepose_results:
         progress(0.97, desc="生成 BVH 文件")
@@ -147,14 +164,29 @@ def process_video(input_video_path, export_bvh: bool = False):
         except Exception as e:
             print(f"BVH 导出失败: {e}")
             bvh_output_path = None
+    
+    # Create skeleton visualization video if requested
+    if show_skeleton and keypoints_sequence:
+        progress(0.98, desc="生成骨架可视化视频")
+        try:
+            success = create_skeleton_video(
+                str(src_path),
+                skeleton_video_path,
+                keypoints_sequence,
+                show_labels=False,
+                show_legend=True,
+                alpha=0.7
+            )
+            if not success:
+                skeleton_video_path = None
+        except Exception as e:
+            print(f"骨架视频生成失败: {e}")
+            skeleton_video_path = None
 
     progress(1.0, desc="完成")
 
-    # Return processed video and BVH file (if requested)
-    if export_bvh and bvh_output_path:
-        return output_video_path, bvh_output_path
-    else:
-        return output_video_path, None
+    # Return processed videos and BVH file
+    return output_video_path, skeleton_video_path, bvh_output_path
 
 # Gradio interface
 root_dir = Path(__file__).resolve().parent
@@ -172,15 +204,29 @@ iface = gr.Interface(
         gr.Checkbox(
             label="导出 BVH 文件",
             value=False,
-            info="同时生成骨骼动画 BVH 文件（可用于 Blender、Maya 等 3D 软件）"
+            info="生成骨骼动画 BVH 文件（可用于 Blender、Maya 等 3D 软件）"
+        ),
+        gr.Checkbox(
+            label="显示骨架可视化",
+            value=True,
+            info="在视频上叠加 3D 骨架模型（彩色骨骼线条）"
         )
     ],
     outputs=[
-        gr.Video(label="Output DensePose Video"),
-        gr.File(label="BVH Motion File", visible=True)
+        gr.Video(label="DensePose 输出（体表分割）"),
+        gr.Video(label="骨架可视化输出（3D 骨骼）", visible=True),
+        gr.File(label="BVH 动作文件", visible=True)
     ],
-    title="Video 2 DensePose + BVH",
-    description="上传视频或使用摄像头录制。勾选「导出 BVH 文件」可同时生成骨骼动画文件。示例视频如下：",
+    title="Video 2 DensePose + 3D Skeleton + BVH",
+    description="""
+    上传视频或使用摄像头录制，自动生成：
+    
+    1. **DensePose 体表分割** - 彩色人体表面映射
+    2. **3D 骨架可视化** - 在视频上叠加骨骼模型（勾选「显示骨架可视化」）
+    3. **BVH 动作文件** - 可导入 Blender/Unity/Maya（勾选「导出 BVH 文件」）
+    
+    示例视频如下：
+    """,
     examples=example_videos,
     allow_flagging="never",
     concurrency_limit=1,

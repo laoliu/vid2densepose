@@ -212,38 +212,74 @@ class BVHExporter:
             head_center = get_body_part_center(body_part_groups['head'])
             torso_center = get_body_part_center(body_part_groups['torso'])
             
-            # 如果能检测到头部和躯干，使用实际位置；否则使用比例估算
-            if head_center is not None and torso_center is not None:
-                # 使用检测到的关键部位
-                head_y = head_center[1]
-                torso_y = torso_center[1]
-                spine_y = (torso_y + y1 + height * 0.5) / 2
-            else:
-                # 使用标准比例
-                head_y = y1 + height * 0.05
-                torso_y = y1 + height * 0.35
-                spine_y = y1 + height * 0.5
+            # 标准人体比例（基于实际观察调整）
+            # 根据用户反馈的图片分析：
+            # - 头部：0-10%
+            # - 颈部：10-13%
+            # - 肩膀：13-16% (关键：肩膀要在上胸上方)
+            # - 上胸 (Spine1)：16-20%
+            # - 下胸/腰部 (Spine)：25-32%
+            # - 臀部 (Hips)：42-48% (腰带位置)
+            # - 大腿根：50%
             
+            if head_center is not None:
+                # 头部中心通常在脸部，需要向上偏移到头顶
+                head_y = head_center[1] - height * 0.08  # 向上偏移到头顶
+                neck_y = head_center[1] + height * 0.01   # 颈部紧邻脸部下方
+            else:
+                head_y = y1 + height * 0.05   # 头顶 5%
+                neck_y = y1 + height * 0.13   # 颈部 13%
+            
+            if torso_center is not None:
+                # 躯干中心大约在胸部位置，需要上移
+                spine1_y = torso_center[1] - height * 0.03  # 上胸稍微上移
+                spine_y = torso_center[1] + height * 0.08   # 下胸/腰部
+            else:
+                spine1_y = y1 + height * 0.18  # 上胸 18%
+                spine_y = y1 + height * 0.28   # 下胸 28%
+            
+            # 计算肩膀Y坐标（必须在颈部和上胸之间，且更接近颈部）
+            shoulder_y = neck_y + (spine1_y - neck_y) * 0.3  # 肩膀在颈部下方30%的位置
+            
+            # 臀部位置（腰带位置，约45%）
+            hips_y = y1 + height * 0.45
+            
+            # 手臂长度调整：根据图片，手应该在腰部附近
+            # 从肩膀到手的总长度约为 28% 身高
+            upper_arm_length = height * 0.11   # 上臂 11%
+            forearm_length = height * 0.10     # 前臂 10%
+            hand_length = height * 0.06        # 手 6%
+            
+            # 计算关键点
             keypoints = np.array([
-                [center_x, y1 + height * 0.85, 0],              # 0: Hips (臀部)
-                [center_x, y1 + height * 0.65, 0],              # 1: Spine (脊柱下段)
-                [center_x, y1 + height * 0.45, 0],              # 2: Spine1 (脊柱上段)
-                [center_x, y1 + height * 0.25, 0],              # 3: Neck (颈部)
-                [center_x, head_y, 0],                          # 4: Head (头部) - 使用检测值
-                [center_x + width * 0.20, y1 + height * 0.35, 0],  # 5: LeftShoulder (左肩)
-                [center_x + width * 0.30, y1 + height * 0.50, 0],  # 6: LeftArm (左上臂)
-                [center_x + width * 0.35, y1 + height * 0.65, 0],  # 7: LeftForeArm (左前臂)
-                [center_x + width * 0.38, y1 + height * 0.80, 0],  # 8: LeftHand (左手)
-                [center_x - width * 0.20, y1 + height * 0.35, 0],  # 9: RightShoulder (右肩)
-                [center_x - width * 0.30, y1 + height * 0.50, 0],  # 10: RightArm (右上臂)
-                [center_x - width * 0.35, y1 + height * 0.65, 0],  # 11: RightForeArm (右前臂)
-                [center_x - width * 0.38, y1 + height * 0.80, 0],  # 12: RightHand (右手)
-                [center_x + width * 0.12, y1 + height * 0.90, 0],  # 13: LeftUpLeg (左大腿)
-                [center_x + width * 0.14, y2 - height * 0.05, 0],  # 14: LeftLeg (左小腿)
-                [center_x + width * 0.15, y2, 0],                  # 15: LeftFoot (左脚)
-                [center_x - width * 0.12, y1 + height * 0.90, 0],  # 16: RightUpLeg (右大腿)
-                [center_x - width * 0.14, y2 - height * 0.05, 0],  # 17: RightLeg (右小腿)
-                [center_x - width * 0.15, y2, 0],                  # 18: RightFoot (右脚)
+                # ===== 躯干中轴线（从上到下）=====
+                [center_x, hips_y, 0],                              # 0: Hips (臀部) - 45% 腰带位置
+                [center_x, spine_y, 0],                             # 1: Spine (下胸/腰) - 28%
+                [center_x, spine1_y, 0],                            # 2: Spine1 (上胸) - 18%
+                [center_x, neck_y, 0],                              # 3: Neck (颈部) - 13%
+                [center_x, head_y, 0],                              # 4: Head (头顶) - 5%
+                
+                # ===== 左臂 =====
+                [center_x - width * 0.18, shoulder_y, 0],                    # 5: LeftShoulder (左肩)
+                [center_x - width * 0.24, shoulder_y + upper_arm_length, 0], # 6: LeftArm (左上臂/肘)
+                [center_x - width * 0.27, shoulder_y + upper_arm_length + forearm_length, 0],  # 7: LeftForeArm (左前臂/腕)
+                [center_x - width * 0.28, shoulder_y + upper_arm_length + forearm_length + hand_length, 0],  # 8: LeftHand (左手)
+                
+                # ===== 右臂 =====
+                [center_x + width * 0.18, shoulder_y, 0],                    # 9: RightShoulder (右肩)
+                [center_x + width * 0.24, shoulder_y + upper_arm_length, 0], # 10: RightArm (右上臂/肘)
+                [center_x + width * 0.27, shoulder_y + upper_arm_length + forearm_length, 0],  # 11: RightForeArm (右前臂/腕)
+                [center_x + width * 0.28, shoulder_y + upper_arm_length + forearm_length + hand_length, 0],  # 12: RightHand (右手)
+                
+                # ===== 左腿 =====
+                [center_x - width * 0.10, y1 + height * 0.50, 0],  # 13: LeftUpLeg (左大腿根) - 50%
+                [center_x - width * 0.11, y1 + height * 0.73, 0],  # 14: LeftLeg (左膝盖) - 73%
+                [center_x - width * 0.12, y1 + height * 0.96, 0],  # 15: LeftFoot (左脚踝) - 96%
+                
+                # ===== 右腿 =====
+                [center_x + width * 0.10, y1 + height * 0.50, 0],  # 16: RightUpLeg (右大腿根)
+                [center_x + width * 0.11, y1 + height * 0.73, 0],  # 17: RightLeg (右膝盖)
+                [center_x + width * 0.12, y1 + height * 0.96, 0],  # 18: RightFoot (右脚踝)
             ], dtype=np.float64)
             
             return keypoints
