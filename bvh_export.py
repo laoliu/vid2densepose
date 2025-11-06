@@ -211,6 +211,10 @@ class BVHExporter:
             # 基于人体比例估算关键点（使用实际检测的部位中心作为参考）
             head_center = get_body_part_center(body_part_groups['head'])
             torso_center = get_body_part_center(body_part_groups['torso'])
+            left_arm_center = get_body_part_center(body_part_groups['left_arm'])
+            right_arm_center = get_body_part_center(body_part_groups['right_arm'])
+            left_leg_center = get_body_part_center(body_part_groups['left_leg'])
+            right_leg_center = get_body_part_center(body_part_groups['right_leg'])
             
             # 标准人体比例（基于实际观察调整）
             # 根据用户反馈的图片分析：
@@ -238,17 +242,46 @@ class BVHExporter:
                 spine1_y = y1 + height * 0.18  # 上胸 18%
                 spine_y = y1 + height * 0.28   # 下胸 28%
             
-            # 计算肩膀Y坐标（必须在颈部和上胸之间，且更接近颈部）
-            shoulder_y = neck_y + (spine1_y - neck_y) * 0.3  # 肩膀在颈部下方30%的位置
+            # 计算肩膀Y坐标（肩膀应该在颈部和上胸之间的靠上位置）
+            # 从图片看，肩膀应该几乎与颈部同高，只略低一点点
+            shoulder_y = neck_y + (spine1_y - neck_y) * 0.2  # 肩膀在颈部下方20%的位置（更靠近颈部）
             
             # 臀部位置（腰带位置，约45%）
             hips_y = y1 + height * 0.45
             
-            # 手臂长度调整：根据图片，手应该在腰部附近
-            # 从肩膀到手的总长度约为 28% 身高
-            upper_arm_length = height * 0.11   # 上臂 11%
-            forearm_length = height * 0.10     # 前臂 10%
-            hand_length = height * 0.06        # 手 6%
+            # 手臂长度调整：前臂和手再往上移（进一步缩短）
+            # L_Arm（肘部）应该在L_Shoulder附近的高度
+            # L_ForeArm, L_Hand 再略微往上
+            upper_arm_length = height * 0.03   # 上臂 3%（肘部紧靠肩膀）
+            forearm_length = height * 0.10     # 前臂 10%（再缩短，往上移）
+            hand_length = height * 0.08        # 手 8%（再缩短，往上移）
+            # 总手臂长度：3% + 10% + 8% = 21% 身高
+            # 肩膀19% + 21% = 40%（手指尖在腰部附近）
+            
+            # X轴宽度调整
+            # 肩宽：成人肩宽约为身高的25-28%
+            shoulder_width = width * 0.35      # 肩膀距离中心线 35% 宽度（左右各35%，总70%宽）
+            
+            # 手臂X轴：前臂和手往外展开
+            arm_width = width * 0.36           # 上臂（肘部）36%
+            forearm_width = width * 0.42       # 前臂（手腕）42%（往外展开）
+            hand_width = width * 0.45          # 手掌 45%（更往外展开）
+            
+            # 手臂关键点Y坐标 - 完全使用固定比例（不使用DensePose手臂检测）
+            # 因为DensePose的手臂中心位置不稳定
+            left_arm_y = shoulder_y + upper_arm_length
+            left_forearm_y = shoulder_y + upper_arm_length + forearm_length
+            left_hand_y = shoulder_y + upper_arm_length + forearm_length + hand_length
+            
+            right_arm_y = shoulder_y + upper_arm_length
+            right_forearm_y = shoulder_y + upper_arm_length + forearm_length
+            right_hand_y = shoulder_y + upper_arm_length + forearm_length + hand_length
+            
+            # 盆骨和腿部宽度
+            hip_width = width * 0.22           # 臀部距离中心线 22% 宽度（盆骨宽度）
+            thigh_width = width * 0.20         # 大腿根 20%（大腿分开）
+            knee_width = width * 0.20          # 膝盖 20%（增加宽度，与大腿同宽）
+            foot_width = width * 0.20          # 脚 20%（脚分开站立）
             
             # 计算关键点
             keypoints = np.array([
@@ -259,27 +292,27 @@ class BVHExporter:
                 [center_x, neck_y, 0],                              # 3: Neck (颈部) - 13%
                 [center_x, head_y, 0],                              # 4: Head (头顶) - 5%
                 
-                # ===== 左臂 =====
-                [center_x - width * 0.18, shoulder_y, 0],                    # 5: LeftShoulder (左肩)
-                [center_x - width * 0.24, shoulder_y + upper_arm_length, 0], # 6: LeftArm (左上臂/肘)
-                [center_x - width * 0.27, shoulder_y + upper_arm_length + forearm_length, 0],  # 7: LeftForeArm (左前臂/腕)
-                [center_x - width * 0.28, shoulder_y + upper_arm_length + forearm_length + hand_length, 0],  # 8: LeftHand (左手)
+                # ===== 左臂（混合DensePose和固定比例）=====
+                [center_x - shoulder_width, shoulder_y, 0],                    # 5: LeftShoulder (左肩)
+                [center_x - arm_width, left_arm_y, 0],                         # 6: LeftArm (左肘)
+                [center_x - forearm_width, left_forearm_y, 0],                 # 7: LeftForeArm (左腕)
+                [center_x - hand_width, left_hand_y, 0],                       # 8: LeftHand (左手)
                 
-                # ===== 右臂 =====
-                [center_x + width * 0.18, shoulder_y, 0],                    # 9: RightShoulder (右肩)
-                [center_x + width * 0.24, shoulder_y + upper_arm_length, 0], # 10: RightArm (右上臂/肘)
-                [center_x + width * 0.27, shoulder_y + upper_arm_length + forearm_length, 0],  # 11: RightForeArm (右前臂/腕)
-                [center_x + width * 0.28, shoulder_y + upper_arm_length + forearm_length + hand_length, 0],  # 12: RightHand (右手)
+                # ===== 右臂（混合DensePose和固定比例）=====
+                [center_x + shoulder_width, shoulder_y, 0],                    # 9: RightShoulder (右肩)
+                [center_x + arm_width, right_arm_y, 0],                        # 10: RightArm (右肘)
+                [center_x + forearm_width, right_forearm_y, 0],                # 11: RightForeArm (右腕)
+                [center_x + hand_width, right_hand_y, 0],                      # 12: RightHand (右手)
                 
-                # ===== 左腿 =====
-                [center_x - width * 0.10, y1 + height * 0.50, 0],  # 13: LeftUpLeg (左大腿根) - 50%
-                [center_x - width * 0.11, y1 + height * 0.73, 0],  # 14: LeftLeg (左膝盖) - 73%
-                [center_x - width * 0.12, y1 + height * 0.96, 0],  # 15: LeftFoot (左脚踝) - 96%
+                # ===== 左腿（X轴加宽）=====
+                [center_x - hip_width, y1 + height * 0.50, 0],     # 13: LeftUpLeg (左大腿根) - 50%
+                [center_x - knee_width, y1 + height * 0.73, 0],    # 14: LeftLeg (左膝盖) - 73%
+                [center_x - foot_width, y1 + height * 0.96, 0],    # 15: LeftFoot (左脚踝) - 96%
                 
-                # ===== 右腿 =====
-                [center_x + width * 0.10, y1 + height * 0.50, 0],  # 16: RightUpLeg (右大腿根)
-                [center_x + width * 0.11, y1 + height * 0.73, 0],  # 17: RightLeg (右膝盖)
-                [center_x + width * 0.12, y1 + height * 0.96, 0],  # 18: RightFoot (右脚踝)
+                # ===== 右腿（X轴加宽）=====
+                [center_x + hip_width, y1 + height * 0.50, 0],     # 16: RightUpLeg (右大腿根)
+                [center_x + knee_width, y1 + height * 0.73, 0],    # 17: RightLeg (右膝盖)
+                [center_x + foot_width, y1 + height * 0.96, 0],    # 18: RightFoot (右脚踝)
             ], dtype=np.float64)
             
             return keypoints
