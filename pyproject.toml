@@ -30,8 +30,9 @@ classifiers = [
 dependencies = [
     "torch==2.1.0",
     "torchvision==0.16.0",
-    "opencv-python",
+    "opencv-python-headless==4.8.1.78",
     "gradio",
+    "huggingface-hub==0.25.2",
     "numpy<2.0",
 ]
 
@@ -50,6 +51,3 @@ vid2densepose = "main:main"
 
 [tool.setuptools]
 py-modules = ["main", "app"]
-
-[tool.uv.extra-build-dependencies]
-git = ["setuptools", "wheel"]
